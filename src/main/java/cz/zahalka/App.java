@@ -143,7 +143,7 @@ public class App extends JFrame
                                 lastSet = true;
                                 fisrtSet = false;
                             }
-
+//
 //                            break;
                         }
                     } else continuesColorY = 0;
