@@ -10,6 +10,7 @@ public class MapDetials implements Serializable {
     ArrayList<Teleport> mapTeleports = new ArrayList<>();
 
     int screens2Copy = 0;
+    int maxScreens2Copy = 0;
 
     public int searchTeleport ( Teleport tel ) {
 //        int i = 0;

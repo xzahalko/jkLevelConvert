@@ -32,9 +32,9 @@ public class Screen implements Serializable {
 //            i++;
         for (int i = 0; i < mapScreenTeleports.size(); i++) {
             Teleport teleport = mapScreenTeleports.get(i);
-            if ( ( teleport.getTeleportScreen() == tel.getTeleportScreen() ) &&
-                    ( teleport.getSide().equals(tel.getSide() ) ) &&
-                    ( teleport.getScreen() == tel.getScreen() ) &&
+            if ( teleport.getTeleportScreen().equals(tel.getTeleportScreen()) &&
+                    teleport.getSide().equals(tel.getSide() ) &&
+                    teleport.getScreen().equals(tel.getScreen()) &&
                     ( teleport.getBarva().getRGB() == tel.getBarva().getRGB() )
             ) {
                 foundPos = i;

@@ -1,5 +1,7 @@
 package cz.zahalka;
 
+import com.sun.jdi.IntegerType;
+
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
@@ -8,6 +10,7 @@ import java.awt.event.ActionListener;
 import java.awt.image.*;
 import java.io.*;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 
 /**
  * Hello world!
@@ -36,14 +39,12 @@ public class App extends JFrame
     }
     public static Image makeColorTransparent(BufferedImage im, final Color color) {
         ImageFilter filter = new RGBImageFilter() {
-
-            // the color we are looking for... Alpha bits are set to opaque
             public int markerRGB = color.getRGB() | 0xFF000000;
 
             public final int filterRGB(int x, int y, int rgb) {
                 if ((rgb | 0xFF000000) == markerRGB) {
                     // Mark the alpha bits as zero - transparent
-                    return 0x00FFFFFF & rgb;
+                    return ( (230 << 24) | (rgb & 0xffffff));
                 } else {
                     // nothing to do
                     return rgb;
@@ -67,6 +68,7 @@ public class App extends JFrame
         int firstSX = 0;
         int firstSY = 0;
         int firstNum = 0;
+        int maxScr2copy = 0;
 
         MapDetials details = new MapDetials();
 
@@ -141,6 +143,7 @@ public class App extends JFrame
                                 lastSet = true;
                                 fisrtSet = false;
                             }
+
 //                            break;
                         }
                     } else continuesColorY = 0;
@@ -151,6 +154,8 @@ public class App extends JFrame
                 } else {
                     System.out.println("screens2Copy " + screens2Copy);
                     details.getScreens().get(firstNum).setScreens2copy(screens2Copy);
+                    if (screens2Copy > maxScr2copy) maxScr2copy = screens2Copy;
+
                     firstNum = sx * (screensPerX + 1) + sy;
                     firstSX = sx;
                     firstSY = sy;
@@ -160,38 +165,164 @@ public class App extends JFrame
                 details.getScreens().get(screenNum).setFirstScreenY(firstSY);
                 details.getScreens().get(screenNum).setFirstScreenNum(firstNum);
                 screenNum++;
+
+                if ( screenNum >= (screensPerX + 1 ) * (screensPerY + 1 ) ) {
+                    if (!lastSet && fisrtSet && prevScrFull ) {
+                        details.getScreens().get(screenNum -1).setLast(true);
+                        lastSet = true;
+                        fisrtSet = false;
+                    }
+                    System.out.println("screens2Copy " + screens2Copy);
+                    details.getScreens().get(firstNum).setScreens2copy(screens2Copy);
+                    if (screens2Copy > maxScr2copy) maxScr2copy = screens2Copy;
+                }
             }
         }
 
+        details.setMaxScreens2Copy(maxScr2copy);
         details.setScreens2Copy(screens2Copy);
 
         return details;
     }
 
-    private static BufferedImage writeGrid(BufferedImage tImage ) {
+    private static BufferedImage writeGridExported(BufferedImage tImage, boolean writeNumbers, boolean writeteleports) {
         Color colorTrans1 = new Color(91, 91, 91);
         Color colorTrans2 = new Color(24, 66, 17);
-        Integer screenNum = 0;
 
-        for (int sx=0; sx<=screensPerX; sx++) {
-            for (int sy = 0; sy <= screensPerY; sy++) {
-                for (int yy = 0; yy <= lHeightY; yy++) {
-                    for (int xx = 0; xx <= lWidthX; xx++) {
-                            if ( ( yy == 0 ) || ( yy == lHeightY ) || ( xx == 0 ) || ( xx == lWidthX ) )
-                                tImage.setRGB(xx + sx * (lWidthX + 1), yy + sy * (lHeightY + 1), colorTrans2.getRGB());
-                            else tImage.setRGB(xx + sx * (lWidthX + 1), yy + sy * (lHeightY + 1), colorTrans1.getRGB());
+        int a = 180;
+        int color1 = (a << 24) | (colorTrans1.getRed() << 16) | (colorTrans1.getGreen() << 8) | colorTrans1.getBlue();
+        int color2 = (a << 24) | (colorTrans2.getRed() << 16) | (colorTrans2.getGreen() << 8) | colorTrans2.getBlue();
+
+        Integer screenNum = 0;
+        int xWidth = tImage.getWidth() / ( lWidthX + 1 );
+        int yHeight = tImage.getHeight() / ( lHeightY + 1);
+        int exportedScrs = 0;
+
+        for (int sx=0; sx<xWidth; sx++) {
+            for (int sy = 0; sy <yHeight; sy++) {
+                for (int yy = 0; yy <=lHeightY; yy++) {
+                    for (int xx = 0; xx <=lWidthX; xx++) {
+                        if ((yy == 0) || (yy == lHeightY) || (xx == 0) || (xx == lWidthX))
+                            tImage.setRGB(xx + sx * (lWidthX + 1), yy + sy * (lHeightY + 1), color2);
+                        else tImage.setRGB(xx + sx * (lWidthX + 1), yy + sy * (lHeightY + 1), color1);
                     }
                 }
+                System.out.println(screenNum.toString());
+                screenNum++;
+            }
+        }
+
+        screenNum = 0;
+        for (int i = 0; i < mapDetails.getScreens().size(); i++) {
+            Screen scr = mapDetails.getScreens().get(i);
+            screenNum++;
+            int sx=scr.getXPos();
+            int sy=scr.getYPos();
+            int maxScreens = mapDetails.getMaxScreens2Copy();
+            if (scr.first)
+                exportedScrs++;
+
+            int obrY = ((maxScreens - 1 - ( sy - scr.getFirstScreenY() )  - ( ( sx - scr.getFirstScreenX() ) * (screensPerY + 1))) * (lHeightY + 1));
+//            int obrTextY = ((maxScreens - 1 - ( sy - scr.getFirstScreenY() )  - ( ( sx - scr.getFirstScreenX() ) * (screensPerY + 1))) * (lHeightY + 1));
+            int obrX =  exportedScrs * (lWidthX + 1)*2;
+
+
+            if ( writeNumbers ) {
                 Graphics g = tImage.getGraphics();
                 g.setFont(new Font("Nova Square", Font.PLAIN, 7));
                 g.setColor(colorTrans2);
-                screenNum++;
-                if ( screenNum < 100 )
+                if (screenNum < 100)
+                    g.drawString(screenNum.toString(), lWidthX - 9 + obrX, lHeightY - 1 + obrY);
+                else
+                    g.drawString(screenNum.toString(), lWidthX - 13 + obrX, lHeightY - 1 + obrY);
+            }
+
+            if ( writeteleports ) {
+                Graphics g = tImage.getGraphics();
+                g.setFont(new Font("Nova Square", Font.PLAIN, 7));
+                g.setColor(colorTrans2);
+                ArrayList<Teleport> tels = mapDetails.getScreens().get(screenNum - 1).getMapScreenTeleports();
+
+                for (int j = 0; j < tels.size(); j++) {
+                    Teleport tel = tels.get(j);
+                    if (tel.getTeleportScreen() < 100) {
+                        if (tel.getSide().equals("L"))
+                            g.drawString(tel.getTeleportScreen().toString(), obrX - (lWidthX + 1) - 9, lHeightY - 1 + obrY);
+                        else
+                            g.drawString(tel.getTeleportScreen().toString(), obrX + 1, lHeightY - 1 + obrY);
+                    } else {
+                        if (tel.getSide().equals("L"))
+                            g.drawString(tel.getTeleportScreen().toString(), obrX - (lWidthX + 1) - 13, lHeightY - 1 + obrY);
+                        else
+                            g.drawString(tel.getTeleportScreen().toString(), obrX + 1, lHeightY - 1 + obrY);
+                    }
+                }
+            }
+        }
+
+        return tImage;
+    }
+
+    private static BufferedImage writeGrid(BufferedImage tImage, boolean writeNumbers, boolean writeteleports) {
+        Color colorTrans1 = new Color(91, 91, 91);
+        Color colorTrans2 = new Color(24, 66, 17);
+
+        int a = 180;
+        int color1 = (a << 24) | (colorTrans1.getRed() << 16) | (colorTrans1.getGreen() << 8) | colorTrans1.getBlue();
+        int color2 = (a << 24) | (colorTrans2.getRed() << 16) | (colorTrans2.getGreen() << 8) | colorTrans2.getBlue();
+
+        Integer screenNum = 0;
+        int xWidth = tImage.getWidth() / ( lWidthX + 1 );
+        int yHeight = tImage.getHeight() / ( lHeightY + 1);
+
+        for (int i = 0; i < mapDetails.getScreens().size(); i++) {
+            Screen scr = mapDetails.getScreens().get(i);
+            screenNum++;
+            int sx=scr.getXPos();
+            int sy=scr.getYPos();
+
+            for (int yy = 0; yy <= lHeightY; yy++) {
+                for (int xx = 0; xx <= lWidthX; xx++) {
+                    if ((yy == 0) || (yy == lHeightY) || (xx == 0) || (xx == lWidthX))
+                        tImage.setRGB(xx + sx * (lWidthX + 1), yy + sy * (lHeightY + 1), color2);
+                    else tImage.setRGB(xx + sx * (lWidthX + 1), yy + sy * (lHeightY + 1), color1);
+                }
+            }
+
+            if (writeNumbers) {
+                Graphics g = tImage.getGraphics();
+                g.setFont(new Font("Nova Square", Font.PLAIN, 7));
+                g.setColor(colorTrans2);
+                if (screenNum < 100)
                     g.drawString(screenNum.toString(), lWidthX - 9 + sx * (lWidthX + 1), lHeightY - 1 + sy * (lHeightY + 1));
                 else
                     g.drawString(screenNum.toString(), lWidthX - 13 + sx * (lWidthX + 1), lHeightY - 1 + sy * (lHeightY + 1));
             }
+
+            if (writeteleports) {
+                Graphics g = tImage.getGraphics();
+                g.setFont(new Font("Nova Square", Font.PLAIN, 7));
+                g.setColor(colorTrans2);
+                ArrayList<Teleport> tels = mapDetails.getScreens().get(screenNum - 1).getMapScreenTeleports();
+                System.out.println(screenNum.toString());
+
+                for (int j = 0; j < tels.size(); j++) {
+                    Teleport tel = tels.get(j);
+                    if (screenNum < 100) {
+                        if (tel.getSide().equals("L"))
+                            g.drawString(tel.getScreen().toString(), lWidthX - 9 + (sx - 1) * (lWidthX + 1), lHeightY - 1 + sy * (lHeightY + 1));
+                        else
+                            g.drawString(tel.getScreen().toString(), lWidthX - 9 + (sx + 1) * (lWidthX + 1), lHeightY - 1 + sy * (lHeightY + 1));
+                    } else {
+                        if (tel.getSide().equals("L"))
+                            g.drawString(tel.getScreen().toString(), lWidthX - 13 + (sx - 1) * (lWidthX + 1), lHeightY - 1 + sy * (lHeightY + 1));
+                        else
+                            g.drawString(tel.getScreen().toString(), lWidthX - 13 + (sx + 1) * (lWidthX + 1), lHeightY - 1 + sy * (lHeightY + 1));
+                    }
+                }
+            }
         }
+
         return tImage;
     }
 
@@ -240,16 +371,19 @@ public class App extends JFrame
                         Screen scr = mapDetails.getScreens().get(i);
                         if (scr.first) {
                             if (scr.getScreens2copy() > maxScr2copy) maxScr2copy = scr.getScreens2copy();
+                            //+1 pro obrazovku vlevo od zakladu
                             width = width + ( lWidthX + 1 )  * 2;
                             height = maxScr2copy * (lHeightY + 1);
                         }
                         if (i == 0) scr2copy = maxScr2copy;
                     }
+                    width = width + ( lWidthX + 1 );
 
                     targetImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
                     Graphics2D    graphics = targetImage.createGraphics();
                     graphics.setPaint ( new Color(91, 91, 91) );
                     graphics.fillRect ( 0, 0, width, height );
+                    targetImage = writeGridExported(targetImage, false, true);
 
                     int exportedScr = 0;
                     for (int i = 0; i < mapDetails.getScreens().size(); i++) {
@@ -268,15 +402,19 @@ public class App extends JFrame
 
                                     for (int yy = 0; yy <= lHeightY; yy++) {
                                         for (int xx = 0; xx <= lWidthX; xx++) {
-                                            Color originalColor = new Color(originalImage.getRGB(xx + sx * (lWidthX + 1), yy + sy * (lHeightY + 1)));
+                                            Color originalColor = new Color(originalImage.getRGB(xx + sx * (lWidthX + 1), yy + sy * (lHeightY + 1)), true);
                                             int r1 = originalColor.getRed();
                                             int g1 = originalColor.getGreen();
                                             int b1 = originalColor.getBlue();
                                             int a1 = originalColor.getAlpha();
 
-                                            Color bnw = new Color(r1, g1, b1, a1);
+                                            Color bnw;
+                                            if ( ( a1 != 255 ) && (originalColor.getRGB() == 0) )
+                                                bnw = new Color(91, 91, 91);
+                                            else
+                                                bnw = new Color(r1, g1, b1);
                                             targetImage.setRGB(
-                                                    obrX + xx,
+                                                    obrX + xx + ( lWidthX + 1),
                                                     obrY + yy,
                                                     bnw.getRGB()
                                             );
@@ -289,10 +427,10 @@ public class App extends JFrame
                             System.out.println("screen copied " + scr2copy);
                         }
                     }
-/*
+
                     Image im  = makeColorTransparent( targetImage, new Color(91, 91, 91) );
                     targetImage = imageToBufferedImage( im );
-*/
+
                     try {
                         File outputfile = new File(Paths.get(selectedFile.getAbsolutePath()).getParent().toString() + "\\saved.png");
                         ImageIO.write(targetImage, "png", outputfile);
@@ -323,7 +461,8 @@ public class App extends JFrame
 
 //vyplneni sedivou barvou cely obrazek
                     targetImageOrig = new BufferedImage(widthDef,heightDef,  BufferedImage.TYPE_INT_RGB);
-                    targetImageOrig = writeGrid(targetImageOrig);
+                    targetImageOrig = writeGrid(targetImageOrig, true, false);
+//                    targetImageOrig = imageToBufferedImage( targetImageOrig );
 
                     exportedScr = 0;
                     for (int i = 0; i < mapDetails.getScreens().size(); i++) {
@@ -344,7 +483,7 @@ public class App extends JFrame
                                     }
                                     for (int yy = 0; yy <= lHeightY; yy++) {
                                         for (int xx = 0; xx <= lWidthX; xx++) {
-                                            Color originalColor = new Color(targetImage.getRGB(obrX + xx,obrY + yy));
+                                            Color originalColor = new Color(targetImage.getRGB(obrX + xx + ( lWidthX + 1),obrY + yy), true);
                                             int r1 = originalColor.getRed();
                                             int g1 = originalColor.getGreen();
                                             int b1 = originalColor.getBlue();
@@ -367,7 +506,9 @@ public class App extends JFrame
                     }
 
                     //nastav sedivou barvu transparentni
-//                    Image im  = makeColorTransparent( targetImageOrig, new Color(91, 91, 91) );
+                    Image im2  = makeColorTransparent( targetImageOrig, new Color(91, 91, 91) );
+                    targetImageOrig = imageToBufferedImage( im2 );
+//                    Image im  = makeColorTransparent( targetImageOrig, new Color(24, 66, 17) );
 //                    targetImageOrig = imageToBufferedImage( im );
 
                     try {
